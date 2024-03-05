@@ -27,7 +27,7 @@ x1 = symp_net(x0, h) # defines a random but symplectic transformation from x to 
 SympNet inherits from ```torch.nn.Module``` and can therefore be trained like a pytorch module.  Here is a minimal working example of training a SympNet using quadratic ridge polynomials (which is best for quadratic Hamiltonians)
 
 #### Generating data
-We will generate data of the form $`\\{x(ih)\\}_{i=0}^{n}=\\{p(ih), q(ih)\\}_{i=0}^{n}`$, where $ x(t) $ is the solution to the Hamiltonian ODE $ \dot{x} = J\nabla H $, with the simple Harmonic oscillator Hamiltonian $ H = \frac{1}{2} (p^2 + q^2) $. The data is arranged in the form $ x_0 = \{x(ih)\}_{i=0}^{n} $, $ x_1 = \{x(ih)\}_{i=1}^{n+1} $ and same for $ t $. 
+We will generate data of the form $` \{x(ih)\}_{i=0}^{n+1}=\{p(ih), q(ih)\}_{i=0}^{n+1}`$, where $`x(t)`$ is the solution to the Hamiltonian ODE $`\dot{x} = J\nabla H `$, with the simple Harmonic oscillator Hamiltonian $` H = \frac{1}{2} (p^2 + q^2) `$. The data is arranged in the form $` x_0 = \{x(ih)\}_{i=0}^{n} `$, $` x_1 = \{x((i+1)h)\}_{i=0}^{n} `$ and same for $` t `$. 
 ```python 
 import torch 
 
