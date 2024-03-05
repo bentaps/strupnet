@@ -7,7 +7,7 @@ Install it using pip: ```pip install strupnet```
 
 ## SympNet: Symplectic neural networks
 
-This package implements the symplectic neural networks found in [1] ("G" and "LA"-SympNets) and [2] ("H"-SympNets) as well as some new ones [3] ("P", "R" and "GR"-SympNets). Setting `method="P"` 
+This package implements the symplectic neural networks found in [1] ("G" and "LA"-SympNets) and [2] ("H"-SympNets) as well as some new ones [3] ("P", "R" and "GR"-SympNets).
 
 ### Basic example
 ```python 
