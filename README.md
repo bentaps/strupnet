@@ -1,2 +1,2 @@
-# sympnet
-Symplectic neural networks for learning dynamics of Hamiltonian systems from data. 
+# strupnet
+Structure-preserving neural networks for learning dynamics of differential equations from data. 
