@@ -7,6 +7,8 @@ Install it using pip: ```pip install strupnet```
 
 ## SympNet: Symplectic neural networks
 
+This package implements the symplectic neural networks found in [1] ("G" and "LA"-SympNets) and [2] ("H"-SympNets) as well as some new ones [3] ("P", "R" and "GR"-SympNets). Setting `method="P"` 
+
 ### Basic example
 ```python 
 import torch
@@ -21,6 +23,12 @@ x0 = torch.randn(2 * dim) # phase space coordinate x0 = (p0, q0)
 x1 = sympnet(x0, timestep) # defines a random but symplectic transformation from x0 to x1
 ```
 The rest of your code is identical to you how you would train any module that inherits from `torch.nn.Module`. 
+
+## References
+
+[1] Jin, P., Zhang, Z., Zhu, A., Tang, Y. and Karniadakis, G.E., 2020. SympNets: Intrinsic structure-preserving symplectic networks for identifying Hamiltonian systems. Neural Networks, 132, pp.166-179.
+[2] Burby, J.W., Tang, Q. and Maulik, R., 2020. Fast neural Poincaré maps for toroidal magnetic fields. Plasma Physics and Controlled Fusion, 63(2), p.024001.
+[3] In press. 
 
 <!-- # Contributing:
 
