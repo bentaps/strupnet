@@ -12,7 +12,7 @@ Install it using pip: ```pip install strupnet```
 import torch
 from strupnet import SympNet
 
-dim=2 # degrees of freedom for the Hamiltonian system. x = (p, q) \in R^{2*dim}
+dim = 2 # degrees of freedom for the Hamiltonian system. x = (p, q) \in R^{2*dim}
 sympnet = SympNet(dim=dim, layers=12, width=8)
 
 timestep = torch.tensor([0.1]) # time-step 
