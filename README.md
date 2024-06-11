@@ -5,7 +5,7 @@ This package implements structure-preserving neural networks for learning dynami
 ## Installing 
 Install it using pip: ```pip install strupnet```
 
-## SympNet: Symplectic neural networks
+## `SympNet`: Symplectic neural networks
 
 This package implements the symplectic neural networks found in [1] ("G" and "LA"-SympNets) and [2] ("H"-SympNets) as well as some new ones [3] ("P", "R" and "GR"-SympNets).
 
@@ -24,10 +24,41 @@ x1 = sympnet(x0, timestep) # defines a random but symplectic transformation from
 ```
 The rest of your code is identical to you how you would train any module that inherits from `torch.nn.Module`. 
 
+## `VolNet`: Volume-preserving neural networks
+
+This module neural networks with unit Jacobian determinant. The `VolNet` is constructed from compositions of `SympNets`, and therefore requires you to pass through arguments that define one of the above `SympNets`. See the below example on how it's initialised.
+
+### Basic example
+```python 
+import torch
+from strupnet import VolNet
+
+dim = 3 # dimension of the ODE 
+
+p_sympnet_kwargs = dict(
+    method="P",
+    layers=6,
+    max_degree=4, # used for method='P' only, method='R' requires you to specify width.
+)
+
+volnet = VolNet(dim=DIM, **p_sympnet_kwargs)
+
+timestep = torch.tensor([0.1]) # time-step 
+x0 = torch.randn(3)
+
+x1 = volnet(x0, timestep) # defines a random but volume-preserving neural network mapping from x0 to x1
+```
+The rest of your code is identical to you how you would train any module that inherits from `torch.nn.Module`. 
+
+## Example notebooks
+See the `examples/` folder for notebooks on basic implementation of `SympNet` and `VolNet`
+
 ## References
 
 [1] Jin, P., Zhang, Z., Zhu, A., Tang, Y. and Karniadakis, G.E., 2020. SympNets: Intrinsic structure-preserving symplectic networks for identifying Hamiltonian systems. Neural Networks, 132, pp.166-179.
+
 [2] Burby, J.W., Tang, Q. and Maulik, R., 2020. Fast neural Poincaré maps for toroidal magnetic fields. Plasma Physics and Controlled Fusion, 63(2), p.024001.
+
 [3] In press. 
 
 <!-- # Contributing:

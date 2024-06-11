@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "strupnet"
-version = "0.0.3"
+version = "0.0.4"
 description = "Structure-preserving neural networks"
 readme = "README.md"
 authors = [{ name = "Ben Tapley", email = "bentapley@hotmail.com" }]

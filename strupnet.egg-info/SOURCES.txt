@@ -2,9 +2,9 @@ LICENSE
 README.md
 pyproject.toml
 strupnet/__init__.py
-strupnet/hnn.py
 strupnet/snn.py
 strupnet/utils.py
+strupnet/vnn.py
 strupnet.egg-info/PKG-INFO
 strupnet.egg-info/SOURCES.txt
 strupnet.egg-info/dependency_links.txt
@@ -22,6 +22,7 @@ strupnet/layers/force.py
 strupnet/nn/__init__.py
 strupnet/nn/activation.py
 strupnet/nn/net.py
+strupnet/nn/poly.py
 strupnet/nn/scalar.py
 strupnet/tests/__init__.py
 strupnet/tests/test_sympnet.py
