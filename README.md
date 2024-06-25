@@ -17,7 +17,7 @@ from strupnet import SympNet
 dim = 2 # degrees of freedom for the Hamiltonian system. x = (p, q) \in R^{2*dim}
 sympnet = SympNet(dim=dim, layers=12, width=8)
 
-timestep = torch.tensor([0.1]) # time-step 
+timestep = torch.tensor([0.1])
 x0 = torch.randn(2 * dim) # phase space coordinate x0 = (p0, q0) 
 
 x1 = sympnet(x0, timestep) # defines a random but symplectic transformation from x0 to x1
@@ -26,7 +26,7 @@ The rest of your code is identical to you how you would train any module that in
 
 ## `VolNet`: Volume-preserving neural networks
 
-This module neural networks with unit Jacobian determinant. The `VolNet` is constructed from compositions of `SympNets`, and therefore requires you to pass through arguments that define one of the above `SympNets`. See the below example on how it's initialised.
+This module implements neural networks with unit Jacobian determinant. The `VolNet` is constructed from compositions of `SympNets`, and therefore requires you to pass through arguments that define one of the above `SympNets`. See the below example on how it's initialised.
 
 ### Basic example
 ```python 
