@@ -34,29 +34,37 @@ def hamiltonian_matrix_exponential(h, A):
     n = A.shape[0] // 2
     J = canonical_symplectic_matrix(n)
     # use scipy.linalg.expm (Pade approximation), instead of torch.matrix_exp (Taylor approximation)
-    return torch.tensor(expm(h * J @ A)) 
+    # return torch.tensor(expm(h * J @ A))
+    return torch.matrix_exp(h * J @ A)
 
 
-def generate_linear_hamiltonian_trajectory(p0, q0, h, nsteps):
+def generate_linear_hamiltonian_trajectory(p0, q0, h, nsteps, device=None):
     x = torch.cat([p0, q0])
     dim = x.shape[0]
     data = torch.zeros(nsteps + 1, dim)
     A = symmetric_matrix(dim // 2)
-    flow_map = hamiltonian_matrix_exponential(h, A)
+    matrix_exp = hamiltonian_matrix_exponential(h, A)
+    if device:
+        matrix_exp = matrix_exp.to(device=device)
+        data = data.to(device=device)
     for i in range(nsteps + 1):
         data[i] = x
-        x = flow_map @ x
+        x = matrix_exp @ x
     return data
 
 
-def generate_linear_hamiltonian_data(dim, ndata, timestep, lims=[-1, 1], nsteps=1):
+def generate_linear_hamiltonian_data(
+    dim, ndata, timestep, lims=[-1, 1], nsteps=1, device=None
+):
     data = torch.zeros(ndata, 2, 2 * dim)
+    if device:
+        data = data.to(device=device)
     for i in range(ndata):
         # random initial condition
         p0 = lims[0] + (lims[1] - lims[0]) * torch.rand(dim)
         q0 = lims[0] + (lims[1] - lims[0]) * torch.rand(dim)
         data[i, :, :] = generate_linear_hamiltonian_trajectory(
-            p0, q0, timestep, nsteps=nsteps
+            p0, q0, timestep, nsteps=nsteps, device=device
         )
     x0, x1 = data[:, :-1, :].reshape(-1, 2 * dim), data[:, 1:, :].reshape(-1, 2 * dim)
     return x0, x1
@@ -92,12 +100,21 @@ def create_gif(solution, exact_solution=None, title="gif", duration=0.05):
 
 
 def train(
-    net, x0, x1, lr=0.01, nepochs=4000, tol=1e-13, timestep=0.1, weight_decay=0.0, use_best_train_loss=True
+    net,
+    x0,
+    x1,
+    timestep,
+    lr=0.01,
+    nepochs=4000,
+    tol=1e-13,
+    weight_decay=0.0,
+    use_best_train_loss=True,
 ):
     optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
     mse = torch.nn.MSELoss()
     training_curve = torch.zeros(nepochs)
     progress_bar = tqdm(range(nepochs))
+    best_train_loss = torch.tensor(float("inf"))
     for epoch in progress_bar:
         optimizer.zero_grad()
         x1_pred = net(x=x0, dt=timestep)
@@ -107,10 +124,13 @@ def train(
         if loss.item() < tol:
             break
         if use_best_train_loss:
-            if epoch == 0 or loss.item() < training_curve[epoch - 1]:
-                torch.save(net.state_dict(), "best_model.pt")
-        progress_bar.set_postfix({"train_loss": loss.item()})
+            if loss.item() < best_train_loss:
+                best_state_dict = net.state_dict()
+                best_train_loss = loss.item()
+        progress_bar.set_postfix(
+            {"train_loss": loss.item(), "best_train_loss": best_train_loss}
+        )
         training_curve[epoch] = loss.item()
     print("Final loss value: ", loss.item())
-    net.load_state_dict(torch.load("best_model.pt"))
+    net.load_state_dict(best_state_dict)
     return training_curve
