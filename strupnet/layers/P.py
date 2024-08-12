@@ -32,13 +32,10 @@ class Layer(nn.Module):
         x = x + h * polynomial_derivative * symp_weight
         return x
 
-    def hamiltonian(self, p, q):
+    def hamiltonian(self, x):
         """Returns the sub-hamiltonian of the layer"""
         # if isinstance(p, torch.Tensor) and isinstance(q, torch.Tensor):
-        monomial = sum(
-            p[i] * self.params["A"][i] + q[i] * self.params["B"][i]
-            for i in range(self.dim)
-        )
+        monomial = sum(x[i] * self.params["w"][i] for i in range(2 * self.dim) )
         polynomial = sum(
             self.params["a"][i - self.min_degree] * monomial**i
             for i in range(self.min_degree, self.max_degree + 1)

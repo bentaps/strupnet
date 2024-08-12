@@ -1,6 +1,8 @@
 import torch
 import importlib
 import sympy as sp
+from .bea import truncated_bea_map
+
 
 torch.set_default_dtype(torch.float64)
 
@@ -20,6 +22,7 @@ class SympNet(torch.nn.Module):
         sublayers=5,
         activation=None,
         volume_step=False,
+        **kwargs,
     ):
         """SympNet.
         Args:
@@ -48,17 +51,18 @@ class SympNet(torch.nn.Module):
             "sublayers": sublayers if method == "LA" else None,
             "activation": activation,
             "volume_step": volume_step,
+            **kwargs,
         }
         self.layers_list = self.init_layers()
 
     def forward(self, x, dt, symmetric=None, reverse=False):
-        """ Forward pass of the SNN. 
+        """Forward pass of the SNN.
         Args:
             x (torch.Tensor): Input tensor of shape [..., 2 * dim].
             dt (float): Time step.
             symmetric (bool): Make the method time-symmetric. Default: None.
             reverse (bool): Reverse the SNN layers. Default: False.
-                """
+        """
         symmetrise = symmetric if symmetric is not None else self.symmetric
         if symmetrise:
             x = self.forward(x, dt / 2, symmetric=False)
@@ -92,23 +96,44 @@ class SympNet(torch.nn.Module):
             layers.append(layer(**self.layer_kwargs))
         return layers
 
-    def _inv_mod_hamiltonians(self, p, q):
+    def hamiltonian(self, x, h=None, order=0):
+        if not hasattr(self, "_hamiltonian_function"):
+            error_msg = "Must provide timestep h for first call to hamiltonian"
+            assert h is not None, error_msg
+            H_sym = self.corrected_hamiltonian(order=order, h=h)
+            H_fun = sp.lambdify(sp.symbols(f"x:{2*self.dim}"), H_sym.as_expr())
+            self._hamiltonian_function = lambda x: H_fun(*x.T)
+        x = x.detach().numpy() if isinstance(x, torch.Tensor) else x
+        return self._hamiltonian_function(x)
+
+    def corrected_hamiltonian(self, order=0, h=None, truncate=True, tol=None):
+        """returns the corrected hamiltonian for the sympnet up to the specified
+        order. Substitutes the timestep h if provided, otherwise returns the
+        expression with symbolic h."""
+        x_sym = sp.symbols(f"x:{2 * self.dim}")
+        h_sym = sp.symbols(f"h")
+        sub_hamiltonians = self._inv_mod_hamiltonians(x_sym)
+        corrected_H_with_sym_h = truncated_bea_map(
+            sub_hamiltonians,
+            dim=self.dim,
+            h=h_sym,
+            order=order,
+            truncate=truncate,
+            x_vars=x_sym,
+            tol=tol,
+        )
+        if h is not None:
+            return corrected_H_with_sym_h.subs(h_sym, h)
+        else:
+            return corrected_H_with_sym_h
+
+    def _inv_mod_hamiltonians(self, x):
+        """Returns the list of sub-hamiltonians for the inverse modified Hamiltonian"""
         if not hasattr(self.layers_list[0], "hamiltonian"):
             raise NotImplementedError(
                 f"Hamiltonian not implemented for method {self.method}"
             )
         hamiltonian_list = []
         for layer in self.layers_list:
-            hamiltonian_list.append(layer.hamiltonian(p, q))
+            hamiltonian_list.append(layer.hamiltonian(x))
         return hamiltonian_list
-
-    def hamiltonian(self, x, h=None, order=2):
-        if not hasattr(self, "_hamiltonian_function"):
-            assert (
-                h is not None
-            ), "Must provide timestep h for first call to hamiltonian"
-            H_sym = self.corrected_hamiltonian(order=order, h=h)
-            H_fun = sp.lambdify(sp.symbols(f"x:{2*self.dim}"), H_sym.as_expr())
-            self._hamiltonian_function = lambda x: H_fun(*x.T)
-        x = x.detach().numpy() if isinstance(x, torch.Tensor) else x
-        return self._hamiltonian_function(x)
