@@ -2,6 +2,7 @@ import io
 import matplotlib.pyplot as plt
 import imageio
 import torch
+import numpy as np
 
 
 def canonical_symplectic_matrix(n):
@@ -27,6 +28,7 @@ def hamiltonian_exp_map(n, h):
     A = torch.zeros((2*n, 2*n))
     A[:n, :n] = M 
     A[n:, n:] = -L
+    
     return torch.matrix_exp(h*J@A) 
 
 def generate_linear_hamiltonian_trajectory(p0, q0, h, nsteps):
@@ -82,3 +84,22 @@ def create_gif(solution, exact_solution=None, title='gif', duration=0.05):
     imageio.mimsave(filename, images, duration=duration, loop=0)
 
     print(f'GIF saved as {filename}')
+
+
+def train(net, x0, x1, lr=0.01, nepochs=4000, tol=1e-13, timestep=0.1):
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
+    mse = torch.nn.MSELoss()
+    training_curve = torch.zeros(nepochs)
+    for epoch in range(nepochs):
+        optimizer.zero_grad()    
+        x1_pred = net(x=x0, dt=timestep)
+        loss = mse(x1, x1_pred)
+        loss.backward()
+        optimizer.step()
+        if loss.item() < tol:
+            break
+        if epoch % 100 == 0:
+            print("Epoch: ", epoch, " Loss: ", loss.item())
+        training_curve[epoch] = loss.item()
+    return training_curve
+    print("Final loss value: ", loss.item())
