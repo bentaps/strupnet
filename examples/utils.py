@@ -2,7 +2,8 @@ import io
 import matplotlib.pyplot as plt
 import imageio
 import torch
-import numpy as np
+from tqdm import tqdm
+from scipy.linalg import expm
 
 
 def canonical_symplectic_matrix(n):
@@ -11,10 +12,8 @@ def canonical_symplectic_matrix(n):
     J[n:, :n] = torch.eye(n)
     return J
 
-def hamiltonian_exp_map(n, h):
-    # Symplectic matrix
-    J = canonical_symplectic_matrix(n)
-    
+
+def symmetric_matrix(n):
     # Discrete Laplacian matrix
     L = torch.eye(n)
     L -= torch.roll(L, 1, dims=1)
@@ -24,35 +23,46 @@ def hamiltonian_exp_map(n, h):
     # Mass matrix
     M = torch.eye(n)
 
-    # Hamiltonian matrix
-    A = torch.zeros((2*n, 2*n))
-    A[:n, :n] = M 
+    # Symmetric matrix
+    A = torch.zeros((2 * n, 2 * n))
+    A[:n, :n] = M
     A[n:, n:] = -L
-    
-    return torch.matrix_exp(h*J@A) 
+    return A
+
+
+def hamiltonian_matrix_exponential(h, A):
+    n = A.shape[0] // 2
+    J = canonical_symplectic_matrix(n)
+    # use scipy.linalg.expm (Pade approximation), instead of torch.matrix_exp (Taylor approximation)
+    return torch.tensor(expm(h * J @ A)) 
+
 
 def generate_linear_hamiltonian_trajectory(p0, q0, h, nsteps):
     x = torch.cat([p0, q0])
     dim = x.shape[0]
-    data = torch.zeros(nsteps+1, dim)
-    flow_map = hamiltonian_exp_map(dim//2, h)
-    for i in range(nsteps+1):
+    data = torch.zeros(nsteps + 1, dim)
+    A = symmetric_matrix(dim // 2)
+    flow_map = hamiltonian_matrix_exponential(h, A)
+    for i in range(nsteps + 1):
         data[i] = x
         x = flow_map @ x
     return data
 
+
 def generate_linear_hamiltonian_data(dim, ndata, timestep, lims=[-1, 1], nsteps=1):
-    data = torch.zeros(ndata, 2, 2*dim)
+    data = torch.zeros(ndata, 2, 2 * dim)
     for i in range(ndata):
         # random initial condition
-        p0 = lims[0] + (lims[1] - lims[0])*torch.rand(dim)
-        q0 = lims[0] + (lims[1] - lims[0])*torch.rand(dim)
-        data[i, :, :] = generate_linear_hamiltonian_trajectory(p0, q0, timestep, nsteps=1)
-    x0, x1 = data[:, :-1, :].reshape(-1, 2*dim), data[:,1:, :].reshape(-1, 2*dim)
+        p0 = lims[0] + (lims[1] - lims[0]) * torch.rand(dim)
+        q0 = lims[0] + (lims[1] - lims[0]) * torch.rand(dim)
+        data[i, :, :] = generate_linear_hamiltonian_trajectory(
+            p0, q0, timestep, nsteps=nsteps
+        )
+    x0, x1 = data[:, :-1, :].reshape(-1, 2 * dim), data[:, 1:, :].reshape(-1, 2 * dim)
     return x0, x1
 
 
-def create_gif(solution, exact_solution=None, title='gif', duration=0.05):
+def create_gif(solution, exact_solution=None, title="gif", duration=0.05):
     """
     Create a GIF from a numpy array of shape (dim, nt).
 
@@ -60,46 +70,47 @@ def create_gif(solution, exact_solution=None, title='gif', duration=0.05):
     :param filename: name of the output GIF file
     :param duration: duration of each frame in the GIF
     """
-    filename = title + '.gif'
+    filename = title + ".gif"
     fig, ax = plt.subplots()
     images = []
 
     # Create a plot for each time step and save as an image
     for i in range(solution.shape[0]):
-        ax.clear()  # Clear previous frame
-        ax.plot(solution[i, :], 'o', label='predicted')
+        ax.clear()
+        ax.plot(solution[i, :], "o", label="predicted")
         if exact_solution is not None:
-            ax.plot(exact_solution[i, :], 'ko', label='exact', alpha=0.5)
+            ax.plot(exact_solution[i, :], "ko", label="exact", alpha=0.5)
         ax.set_ylim([-1, 1])  # Fix the y-axis scale for consistency
-        ax.set_title(f'{title}\ntime step: {i+1}')
-        ax.legend(loc='upper right')
-        # Save the plot as a PNG image in memory (not on disk)
+        ax.set_title(f"{title}\ntime step: {i+1}")
+        ax.legend(loc="upper right")
         buf = io.BytesIO()
-        plt.savefig(buf, format='png')
+        plt.savefig(buf, format="png")
         buf.seek(0)
         images.append(imageio.imread(buf))
-
-
-    # Create a GIF from the images
     imageio.mimsave(filename, images, duration=duration, loop=0)
+    print(f"GIF saved as {filename}")
 
-    print(f'GIF saved as {filename}')
 
-
-def train(net, x0, x1, lr=0.01, nepochs=4000, tol=1e-13, timestep=0.1):
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
+def train(
+    net, x0, x1, lr=0.01, nepochs=4000, tol=1e-13, timestep=0.1, weight_decay=0.0, use_best_train_loss=True
+):
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
     mse = torch.nn.MSELoss()
     training_curve = torch.zeros(nepochs)
-    for epoch in range(nepochs):
-        optimizer.zero_grad()    
+    progress_bar = tqdm(range(nepochs))
+    for epoch in progress_bar:
+        optimizer.zero_grad()
         x1_pred = net(x=x0, dt=timestep)
         loss = mse(x1, x1_pred)
         loss.backward()
         optimizer.step()
         if loss.item() < tol:
             break
-        if epoch % 100 == 0:
-            print("Epoch: ", epoch, " Loss: ", loss.item())
+        if use_best_train_loss:
+            if epoch == 0 or loss.item() < training_curve[epoch - 1]:
+                torch.save(net.state_dict(), "best_model.pt")
+        progress_bar.set_postfix({"train_loss": loss.item()})
         training_curve[epoch] = loss.item()
-    return training_curve
     print("Final loss value: ", loss.item())
+    net.load_state_dict(torch.load("best_model.pt"))
+    return training_curve
