@@ -87,7 +87,7 @@ def create_gif(solution, exact_solution=None, title="gif", duration=0.05):
         ax.clear()
         ax.plot(solution[i, :], "o", label="predicted")
         if exact_solution is not None:
-            ax.plot(exact_solution[i, :], "ko", label="exact", alpha=0.5)
+            ax.plot(exact_solution[i, :], "kx", label="exact", alpha=0.5)
         ax.set_ylim([-1, 1])  # Fix the y-axis scale for consistency
         ax.set_title(f"{title}\ntime step: {i+1}")
         ax.legend(loc="upper right")

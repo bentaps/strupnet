@@ -25,6 +25,12 @@ def canonical_symplectic_matrix(dim):
     return J
 
 
+def canonical_symplectic_transformation(x):
+    """Returns the canonical symplectic matrix multiplied by x"""
+    n = x.shape[-1] // 2
+    return torch.cat([-x[..., n:], x[..., :n]], dim=-1)
+
+
 def symplectic_matrix_transformation_2d(w, i):
     """Used for the 2D symplectic volume-preserving substeps. Takes an n-dim vector w and an index i, and returns [0, ..., w[i+1], -w[i], ..., 0]"""
     out = torch.zeros_like(w)

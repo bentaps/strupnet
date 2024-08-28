@@ -15,7 +15,6 @@ class Layer(nn.Module):
         super().__init__()
         self.params = nn.ParameterDict()
         self.params["w"] = get_parameters(dim if keepdim else 2 * dim)
-        self.symplectic_matrix = canonical_symplectic_matrix(dim)
         self.hamiltonian = ScalarNet(1, width, activation="tanh")
         self.init_kwargs = kwargs
         
@@ -24,7 +23,7 @@ class Layer(nn.Module):
         z = (x @ self.params["w"]).unsqueeze(-1)        
         gradH = self.hamiltonian.grad(z)
         if i is None:
-            symp_weight = self.params["w"] @ self.symplectic_matrix
+            symp_weight = canonical_symplectic_transformation(self.params["w"])
         elif isinstance(i, int): # pick the i and i+1 components of w for the volume preserving symplectic flows. 
             symp_weight = symplectic_matrix_transformation_2d(self.params["w"], i)
         else:
