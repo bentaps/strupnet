@@ -1,12 +1,14 @@
 import io
 from math import e
+from os import times
 from re import M
 import matplotlib.pyplot as plt
 import imageio
 import torch
 from tqdm import tqdm
 from scipy.linalg import expm
-
+import scipy 
+import numpy as np 
 
 def canonical_symplectic_matrix(n):
     J = torch.zeros((2 * n, 2 * n))
@@ -14,8 +16,15 @@ def canonical_symplectic_matrix(n):
     J[n:, :n] = torch.eye(n)
     return J
 
+def circulant_matrix(n):
+    x = torch.linspace(-1, 1, n)
+    v = torch.cos(np.pi * x)
+    A = np.zeros((n, n))  # Initialize an n x n matrix
+    for i in range(n):
+        A[i] = np.roll(v, i)  # Shift v to the right by i
+    return A
 
-def symmetric_matrix(n):
+def laplacian_matrix(n):
     # Discrete Laplacian matrix
     L = torch.eye(n)
     L -= torch.roll(L, 1, dims=1)
@@ -32,11 +41,27 @@ def symmetric_matrix(n):
     return A
 
 
-def random_symmetric_matrix(n):
-    A = torch.eye(2 * n)
-    A[n:, n:] = torch.randn(n, n)
-    # A[:n, n:] = torch.zeros(n, n)
+
+def dense_random_symmetric_matrix(n):
+    A = torch.zeros(2 * n, 2 * n)
+    A[:, :] += torch.rand(2*n, 2*n)
+
     A = (A + A.t()) / 2
+    A *= 0.5
+    A += torch.eye(2*n) 
+    return A
+
+def separable_random_symmetric_matrix(n):
+    A = torch.eye(2 * n)
+    I = torch.eye(n)
+    V = torch.rand(n, n)*0.5
+    T = torch.rand(n, n)*0.5
+    V = (V + V.t()) / 2
+    T = (T + T.t()) / 2
+    A[n:, n:] += V
+    A[:n, :n] += T
+    A[:n, n:] += I
+    A[n:, :n] += I
     return A
 
 
@@ -47,18 +72,18 @@ def hamiltonian_matrix_exponential(h, A):
     # return torch.tensor(expm(h * J @ A))
     return torch.matrix_exp(h * J @ A)
 
+def spectrum_adjoint_action(X):
+    eigs = np.linalg.eigvals(X)
+    ad_eigs = np.array([eigs[i] - eigs[j] for i in range(len(eigs)) for j in range(len(eigs))])
+    ad_eigs.sort()
+    return ad_eigs
 
-def generate_linear_hamiltonian_trajectory(p0, q0, h, nsteps, device=None, matrix_type="laplacian", method="matrix_exp"):
+def generate_linear_hamiltonian_trajectory(p0, q0, h, nsteps, symmetric_matrix, device=None, method="matrix_exp"):
     x = torch.cat([p0, q0])
     dim = x.shape[0]
     data = torch.zeros(nsteps + 1, dim)
-    if matrix_type == "laplacian":
-        A = symmetric_matrix(dim // 2) 
-    elif matrix_type == "random":
-        A = random_symmetric_matrix(dim // 2)
-    else:
-        raise ValueError("matrix_type must be 'laplacian' or 'random'")
-    # check if truley symmetric
+    
+    A = symmetric_matrix 
     assert A.allclose(A.t()), "A is not symmetric"
 
     if method == "matrix_exp":
@@ -86,7 +111,7 @@ def generate_linear_hamiltonian_trajectory(p0, q0, h, nsteps, device=None, matri
         
 
 def generate_linear_hamiltonian_data(
-    dim, ndata, timestep, lims=[-1, 1], nsteps=1, device=None, matrix_type="laplacian", method="matrix_exp"
+    dim, ndata, timestep, symmetric_matrix, lims=[-1, 1], nsteps=1, device=None, method="matrix_exp"
 ):
     data = torch.zeros(ndata, 2, 2 * dim)
     if device:
@@ -96,7 +121,7 @@ def generate_linear_hamiltonian_data(
         p0 = lims[0] + (lims[1] - lims[0]) * torch.rand(dim)
         q0 = lims[0] + (lims[1] - lims[0]) * torch.rand(dim)
         data[i, :, :] = generate_linear_hamiltonian_trajectory(
-            p0, q0, timestep, nsteps=nsteps, device=device, matrix_type=matrix_type
+            p0, q0, timestep, symmetric_matrix=symmetric_matrix, nsteps=nsteps, device=device, method=method
         )
     x0, x1 = data[:, :-1, :].reshape(-1, 2 * dim), data[:, 1:, :].reshape(-1, 2 * dim)
     return x0, x1
@@ -130,7 +155,6 @@ def create_gif(solution, exact_solution=None, title="gif", duration=0.05):
     imageio.mimsave(filename, images, duration=duration, loop=0)
     print(f"GIF saved as {filename}")
 
-
 def train(
     net,
     x0,
@@ -138,31 +162,44 @@ def train(
     timestep,
     lr=0.01,
     nepochs=4000,
-    tol=1e-13,
-    weight_decay=0.0,
+    tol=1e-18,  # Lower tolerance
     use_best_train_loss=True,
 ):
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     mse = torch.nn.MSELoss()
     training_curve = torch.zeros(nepochs)
     progress_bar = tqdm(range(nepochs))
     best_train_loss = torch.tensor(float("inf"))
+    best_state_dict = None  # Ensure proper initialization
     for epoch in progress_bar:
-        optimizer.zero_grad()
+        optimizer.zero_grad()  # Clear previous gradients
         x1_pred = net(x=x0, dt=timestep)
         loss = mse(x1, x1_pred)
-        loss.backward()
-        optimizer.step()
-        if loss.item() < tol:
-            break
+        loss.backward()  # Backpropagate the loss
+        optimizer.step()  # Update the model parameters
+        
         if use_best_train_loss:
             if loss.item() < best_train_loss:
                 best_state_dict = net.state_dict()
                 best_train_loss = loss.item()
+
+        # Print gradients
+        norm_grads = sum(param.grad.norm().item() for param in net.parameters())
+
         progress_bar.set_postfix(
-            {"train_loss": loss.item(), "best_train_loss": best_train_loss}
+            {"train_loss": loss.item(), "best_train_loss": best_train_loss, "norm_grads": norm_grads}
         )
+
         training_curve[epoch] = loss.item()
+        
+        if loss.item() < tol or norm_grads < tol:  # Early stopping if loss or grads reach tol
+            break
+        
+    
     print("Final loss value: ", loss.item())
-    net.load_state_dict(best_state_dict)
-    return training_curve
+    
+    # Only load the best state if it was saved
+    if best_state_dict is not None:
+        net.load_state_dict(best_state_dict)
+    
+    return training_curve, best_train_loss
